@@ -176,7 +176,7 @@ Manual pull request starts are deterministic only in `heuristics` mode. In
 planner for the first orchestration step, and action-originated handoff
 envelopes use the planner path when enabled.
 
-In `heuristics` mode, action-originated handoff decisions still use the fixed transition policy and round budget checks.
+In `heuristics` mode, action-originated handoff decisions still use the fixed transition policy and round budget checks. The chain also carries an explicit completed `fix-pr` pass count. Runtime increments it only after a real `fix-pr` action and deterministically blocks a second automatic fix pass; planners must not infer fix history from the round number or PR discussion.
 
 Review-originated `fix-pr` handoffs carry explicit task context when available. The review dispatcher derives it from the latest review synthesis action items, and heuristic mode falls back to a conservative instruction to address only unresolved review synthesis action items while ignoring optional INFO notes and metadata-only polish. When a review synthesis recommends `HUMAN_DECISION`, self-approval-enabled orchestration routes to `agent-self-approve` instead of `fix-pr` or a human stop; self-approval then decides whether to approve, request changes, or block. Manual PR `/orchestrate` starts with a `CHANGES_REQUESTED` review decision use separate context that tells `fix-pr` to address the latest unresolved requested-change review comments instead of the review-synthesis fallback. Self-approval `REQUEST_CHANGES` handoffs preserve the approval agent's handoff context as the `fix-pr` task. Self-approval `APPROVED` handoffs dispatch `agent-self-merge` only when `AGENT_ALLOW_SELF_MERGE=true`.
 

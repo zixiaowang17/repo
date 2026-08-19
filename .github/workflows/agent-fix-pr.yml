@@ -44,6 +44,10 @@ on:
         description: "Maximum automation handoff rounds"
         required: false
         default: "12"
+      automation_fix_pr_passes:
+        description: "Completed automatic fix-pr passes in the current chain"
+        required: false
+        default: "0"
       orchestration_enabled:
         description: "Whether this run belongs to an explicit orchestrator chain"
         required: false
@@ -93,6 +97,10 @@ on:
         type: string
         required: false
         default: "12"
+      automation_fix_pr_passes:
+        type: string
+        required: false
+        default: "0"
       orchestration_enabled:
         type: string
         required: false
@@ -320,6 +328,7 @@ jobs:
         env:
           AUTOMATION_CURRENT_ROUND: ${{ inputs.automation_current_round }}
           AUTOMATION_MAX_ROUNDS: ${{ inputs.automation_max_rounds }}
+          AUTOMATION_FIX_PR_PASSES: ${{ inputs.automation_fix_pr_passes }}
           AUTOMATION_MODE: ${{ inputs.automation_mode }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ steps.auth.outputs.token }}

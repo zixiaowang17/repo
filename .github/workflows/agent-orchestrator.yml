@@ -74,6 +74,10 @@ on:
         description: "Maximum automation handoff rounds"
         required: false
         default: "12"
+      automation_fix_pr_passes:
+        description: "Completed automatic fix-pr passes in the current chain"
+        required: false
+        default: "0"
 
 permissions:
   actions: write
@@ -168,6 +172,7 @@ jobs:
           ORCHESTRATOR_SELF_MERGE_ENABLED: ${{ vars.AGENT_ALLOW_SELF_MERGE || 'false' }}
           ORCHESTRATOR_CURRENT_ROUND: ${{ inputs.automation_current_round }}
           ORCHESTRATOR_MAX_ROUNDS: ${{ inputs.automation_max_rounds }}
+          ORCHESTRATOR_FIX_PR_PASSES: ${{ inputs.automation_fix_pr_passes }}
         with:
           agent: ${{ steps.provider.outputs.provider }}
           github_token: ${{ steps.auth.outputs.token }}
@@ -205,6 +210,7 @@ jobs:
         env:
           AUTOMATION_CURRENT_ROUND: ${{ inputs.automation_current_round }}
           AUTOMATION_MAX_ROUNDS: ${{ inputs.automation_max_rounds }}
+          AUTOMATION_FIX_PR_PASSES: ${{ inputs.automation_fix_pr_passes }}
           AUTOMATION_MODE: ${{ inputs.automation_mode }}
           AGENT_COLLAPSE_OLD_REVIEWS: ${{ vars.AGENT_COLLAPSE_OLD_REVIEWS }}
           BASE_BRANCH: ${{ inputs.base_branch }}

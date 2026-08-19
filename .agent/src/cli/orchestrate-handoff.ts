@@ -1,7 +1,7 @@
 // CLI: post-action handoff orchestrator.
 // Env: AUTOMATION_MODE, SOURCE_ACTION, SOURCE_CONCLUSION, TARGET_NUMBER,
 //      NEXT_TARGET_NUMBER, AUTOMATION_CURRENT_ROUND, AUTOMATION_MAX_ROUNDS,
-//      GITHUB_REPOSITORY, DEFAULT_BRANCH, REQUESTED_BY, REQUEST_TEXT,
+//      AUTOMATION_FIX_PR_PASSES, GITHUB_REPOSITORY, DEFAULT_BRANCH, REQUESTED_BY, REQUEST_TEXT,
 //      SESSION_BUNDLE_MODE, SOURCE_RUN_ID, PLANNER_RESPONSE_FILE, TARGET_KIND,
 //      BASE_BRANCH, BASE_PR, AGENT_COLLAPSE_OLD_REVIEWS, AGENT_ALLOW_SELF_APPROVE,
 //      AGENT_ALLOW_SELF_MERGE
@@ -93,6 +93,11 @@ const UNSATISFACTORY_ACTION_CONCLUSIONS = new Set(["no_changes", "failed", "veri
 function positiveInt(value: string, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function nonNegativeInt(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function parsePositiveTargetNumber(value: string): number {
@@ -846,6 +851,7 @@ const baseBranch = process.env.BASE_BRANCH || "";
 const basePr = process.env.BASE_PR || "";
 const maxRounds = positiveInt(process.env.AUTOMATION_MAX_ROUNDS || "", 12);
 const currentRound = positiveInt(process.env.AUTOMATION_CURRENT_ROUND || "", 1);
+const completedFixPrPasses = nonNegativeInt(process.env.AUTOMATION_FIX_PR_PASSES || "");
 const automationMode = normalizeAutomationMode(process.env.AUTOMATION_MODE || "disabled");
 const allowSelfApprove = ["true", "1", "yes", "on"].includes(
   normalizeToken(process.env.AGENT_ALLOW_SELF_APPROVE || ""),
@@ -1032,6 +1038,7 @@ function reportTerminalToParent(decision: HandoffDecision): void {
       automation_mode: "agent",
       automation_current_round: String(parentRound),
       automation_max_rounds: String(maxRounds),
+      automation_fix_pr_passes: String(completedFixPrPasses),
       session_bundle_mode: sessionBundleMode,
       base_branch: baseBranch,
       base_pr: basePr,
@@ -1313,6 +1320,7 @@ function decidePlannerOrchestration(): HandoffDecision {
     nextTargetNumber: process.env.NEXT_TARGET_NUMBER || "",
     currentRound,
     maxRounds,
+    completedFixPrPasses,
     allowSelfApprove,
     allowSelfMerge,
     sourceHandoffContext,
@@ -1350,6 +1358,7 @@ const routeDecision = authorizationStop || (normalizeToken(sourceAction) === "or
     nextTargetNumber: process.env.NEXT_TARGET_NUMBER || "",
     currentRound,
     maxRounds,
+    completedFixPrPasses,
     allowSelfApprove,
     allowSelfMerge,
     sourceHandoffContext,
@@ -1516,6 +1525,7 @@ const commonInputs = {
   automation_mode: automationMode === "disabled" ? "heuristics" : automationMode,
   automation_current_round: String(decision.nextRound),
   automation_max_rounds: String(maxRounds),
+  automation_fix_pr_passes: String(completedFixPrPasses),
   session_bundle_mode: sessionBundleMode,
 };
 
@@ -1567,6 +1577,7 @@ try {
       target_number: dispatchTargetNumber,
       automation_mode: "heuristics",
       automation_current_round: "1",
+      automation_fix_pr_passes: "0",
       base_branch: effectiveBaseBranch,
       base_pr: effectiveBasePr,
     });

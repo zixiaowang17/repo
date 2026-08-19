@@ -2,7 +2,7 @@
 // Env: GITHUB_REPOSITORY, DEFAULT_BRANCH, AUTOMATION_MODE, SOURCE_ACTION,
 //      SOURCE_CONCLUSION, RESPONSE_FILE, TARGET_NUMBER, NEXT_TARGET_NUMBER,
 //      REQUESTED_BY, REQUEST_TEXT, AUTOMATION_CURRENT_ROUND,
-//      AUTOMATION_MAX_ROUNDS, SESSION_BUNDLE_MODE, SOURCE_RUN_ID, TARGET_KIND,
+//      AUTOMATION_MAX_ROUNDS, AUTOMATION_FIX_PR_PASSES, SESSION_BUNDLE_MODE, SOURCE_RUN_ID, TARGET_KIND,
 //      AUTHOR_ASSOCIATION, ACCESS_POLICY, REPOSITORY_PRIVATE, ORCHESTRATION_ENABLED,
 //      SOURCE_RECOMMENDED_NEXT_STEP, SOURCE_HANDOFF_CONTEXT, BASE_BRANCH, BASE_PR
 
@@ -16,6 +16,11 @@ import {
   normalizeConclusion,
   normalizeRecommendedNextStep,
 } from "../handoff.js";
+
+function nonNegativeInt(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
 
 function readResponseFile(): string {
   const responseFile = process.env.RESPONSE_FILE || "";
@@ -40,6 +45,10 @@ function sourceReviewRecommendedNextStep(sourceAction: string, rawResponse: stri
 
 const automationMode = process.env.AUTOMATION_MODE || "disabled";
 const sourceAction = process.env.SOURCE_ACTION || "";
+const completedFixPrPasses = nonNegativeInt(process.env.AUTOMATION_FIX_PR_PASSES || "");
+const nextCompletedFixPrPasses = completedFixPrPasses + (
+  sourceAction.trim().toLowerCase().replace(/[\s-]+/g, "_") === "fix_pr" ? 1 : 0
+);
 const isManualOrchestrateStart = sourceAction.trim().toLowerCase() === "orchestrate";
 const orchestrationEnabled = String(process.env.ORCHESTRATION_ENABLED || "").trim().toLowerCase() === "true";
 if (!isManualOrchestrateStart && !orchestrationEnabled && !automationModeAllowsHandoff(automationMode)) {
@@ -73,6 +82,7 @@ dispatchWorkflow(repo, "agent-orchestrator.yml", ref, {
   automation_mode: effectiveAutomationMode,
   automation_current_round: process.env.AUTOMATION_CURRENT_ROUND || "1",
   automation_max_rounds: process.env.AUTOMATION_MAX_ROUNDS || "12",
+  automation_fix_pr_passes: String(nextCompletedFixPrPasses),
   source_action: sourceAction,
   source_conclusion: sourceConclusion,
   source_recommended_next_step: sourceRecommendedNextStep,

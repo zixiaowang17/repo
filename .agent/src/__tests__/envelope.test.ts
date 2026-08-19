@@ -2253,6 +2253,8 @@ test("execution workflows expose automation handoff inputs", () => {
     assert.match(workflow, /automation_mode:/);
     assert.match(workflow, /automation_current_round:/);
     assert.match(workflow, /automation_max_rounds:/);
+    assert.match(workflow, /automation_fix_pr_passes:/);
+    assert.match(workflow, /AUTOMATION_FIX_PR_PASSES:\s*\$\{\{ inputs\.automation_fix_pr_passes \}\}/);
     assert.match(workflow, /orchestration_enabled:/);
     assert.match(workflow, /inputs\.orchestration_enabled == 'true'/);
     assert.match(workflow, /node \.agent\/dist\/cli\/dispatch-agent-orchestrator\.js/);
@@ -2273,6 +2275,7 @@ test("execution workflows expose automation handoff inputs", () => {
   assert.match(orchestratorWorkflow, /BASE_BRANCH:\s*\$\{\{ inputs\.base_branch \}\}/);
   assert.match(orchestratorWorkflow, /SOURCE_HANDOFF_CONTEXT:\s*\$\{\{ inputs\.source_handoff_context \}\}/);
   assert.match(orchestratorWorkflow, /ORCHESTRATOR_SOURCE_HANDOFF_CONTEXT:\s*\$\{\{ inputs\.source_handoff_context \}\}/);
+  assert.match(orchestratorWorkflow, /ORCHESTRATOR_FIX_PR_PASSES:\s*\$\{\{ inputs\.automation_fix_pr_passes \}\}/);
   assert.match(orchestrateHandoffCli, /resolveEffectiveBaseInputs/);
   assert.match(orchestrateHandoffCli, /baseBranch:\s*decision\.baseBranch \|\| baseBranch/);
   assert.match(orchestrateHandoffCli, /basePr:\s*decision\.basePr \|\| basePr/);

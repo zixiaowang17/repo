@@ -1046,6 +1046,26 @@ test("review handoff dispatches fix-pr with visible task context", () => {
   assert.match(run.ghLog, /actions\/workflows\/agent-fix-pr\.yml\/dispatches/);
   const inputs = run.dispatchPayload?.inputs as Record<string, string>;
   assert.equal(inputs.orchestrator_context, run.outputs.get("handoff_context"));
+  assert.equal(inputs.automation_fix_pr_passes, "0");
+});
+
+test("review handoff stops before a second automatic fix-pr pass", () => {
+  const run = runOrchestrateHandoff({
+    SOURCE_ACTION: "review",
+    SOURCE_CONCLUSION: "needs_rework",
+    SOURCE_HANDOFF_CONTEXT: "FIX_IN_PR: Address the remaining review finding.",
+    TARGET_KIND: "pull_request",
+    TARGET_NUMBER: "128",
+    AUTOMATION_CURRENT_ROUND: "5",
+    AUTOMATION_MAX_ROUNDS: "10",
+    AUTOMATION_FIX_PR_PASSES: "1",
+  });
+
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  assert.equal(run.outputs.get("decision"), "stop");
+  assert.match(run.outputs.get("reason") || "", /fix-pr pass limit reached/);
+  assert.doesNotMatch(run.ghLog, /actions\/workflows\/agent-fix-pr\.yml\/dispatches/);
+  assert.equal(run.dispatchPayload, null);
 });
 
 test("review SHIP dispatches self-approval when enabled", () => {

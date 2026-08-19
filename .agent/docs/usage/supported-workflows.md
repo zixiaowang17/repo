@@ -71,9 +71,12 @@ Planner-based selection is also used for action-originated handoff runs. The pla
 `handoff_context` string for the next action; `fix-pr` receives it as explicit
 initial steering when the planner dispatches a PR-fix pass. The planner mounts
 memory and rubrics read-only so automated control-flow planning can use steering
-context without mutating those state branches. Orchestration stops when target
-state indicates no safe next action, a route fails, a duplicate handoff marker
-is found, the planner stops or blocks, or the max-round budget is exhausted.
+context without mutating those state branches. The workflow carries a separate
+completed `fix-pr` pass count, increments it only after an actual fix action,
+and deterministically blocks a second automatic fix pass; round number is not
+used as a proxy for fix history. Orchestration stops when target state indicates
+no safe next action, a route fails, a duplicate handoff marker is found, the
+planner stops or blocks, or the max-round budget is exhausted.
 
 When a child issue reaches a terminal stop, the handoff dispatcher resolves the
 trusted child metadata from the issue body or an agent-authored child issue

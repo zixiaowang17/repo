@@ -17,6 +17,7 @@ export interface HandoffInput {
   nextTargetNumber?: string;
   currentRound: number;
   maxRounds: number;
+  completedFixPrPasses?: number;
   allowSelfApprove?: boolean;
   allowSelfMerge?: boolean;
   plannerDecision?: PlannerDecision | null;
@@ -435,6 +436,15 @@ export function formatHandoffMarkerComment(args: {
   return lines.join("\n");
 }
 
+function fixPrPassLimitStop(input: HandoffInput, nextRound: number): HandoffDecision | null {
+  if ((input.completedFixPrPasses || 0) < 1) return null;
+  return {
+    decision: "stop",
+    reason: "automatic fix-pr pass limit reached; human review is required before another fix",
+    nextRound,
+  };
+}
+
 function decideHeuristicHandoff(input: HandoffInput): HandoffDecision {
   const nextRound = input.currentRound + 1;
   const sourceAction = normalizeToken(input.sourceAction);
@@ -501,6 +511,8 @@ function decideHeuristicHandoff(input: HandoffInput): HandoffDecision {
       return { decision: "stop", reason: "review verdict is SHIP", nextRound };
     }
     if (REVIEW_TO_FIX_PR.has(conclusion)) {
+      const limitStop = fixPrPassLimitStop(input, nextRound);
+      if (limitStop) return limitStop;
       return {
         decision: "dispatch",
         nextAction: "fix-pr",
@@ -515,6 +527,8 @@ function decideHeuristicHandoff(input: HandoffInput): HandoffDecision {
 
   if (sourceAction === "agent_self_approve") {
     if (SELF_APPROVAL_TO_FIX_PR.has(conclusion)) {
+      const limitStop = fixPrPassLimitStop(input, nextRound);
+      if (limitStop) return limitStop;
       return {
         decision: "dispatch",
         nextAction: "fix-pr",
@@ -632,6 +646,10 @@ function decideAgentHandoff(input: HandoffInput): HandoffDecision {
   }
   if (sourceAction === "orchestrate" && targetKind === "pull_request") {
     if (plannerDecision.nextAction === "review" || plannerDecision.nextAction === "fix-pr") {
+      if (plannerDecision.nextAction === "fix-pr") {
+        const limitStop = fixPrPassLimitStop(input, nextRound);
+        if (limitStop) return limitStop;
+      }
       if (plannerDecision.nextAction === "fix-pr" && !plannerDecision.handoffContext) {
         return {
           decision: "stop",

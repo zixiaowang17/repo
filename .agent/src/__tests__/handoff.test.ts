@@ -514,6 +514,44 @@ test("review verdicts dispatch fix-pr or stop", () => {
   assert.match(selfApprove.reason, /dispatching agent-self-approve/);
 });
 
+test("fix-pr pass count allows the first automatic fix and blocks the second", () => {
+  const firstFix = decideHandoff({
+    automationMode: "agent",
+    sourceAction: "review",
+    sourceConclusion: "NEEDS_REWORK",
+    sourceHandoffContext: "FIX_IN_PR: Address the current review findings.",
+    targetNumber: "99",
+    currentRound: 3,
+    maxRounds: 10,
+    completedFixPrPasses: 0,
+    plannerDecision: {
+      decision: "handoff",
+      nextAction: "fix-pr",
+      reason: "The first bounded fix pass is required.",
+    },
+  });
+  assert.equal(firstFix.decision, "dispatch");
+  assert.equal(firstFix.nextAction, "fix-pr");
+
+  const secondFix = decideHandoff({
+    automationMode: "agent",
+    sourceAction: "review",
+    sourceConclusion: "NEEDS_REWORK",
+    sourceHandoffContext: "FIX_IN_PR: Address the remaining review findings.",
+    targetNumber: "99",
+    currentRound: 5,
+    maxRounds: 10,
+    completedFixPrPasses: 1,
+    plannerDecision: {
+      decision: "handoff",
+      nextAction: "fix-pr",
+      reason: "Another fix pass would be useful.",
+    },
+  });
+  assert.equal(secondFix.decision, "stop");
+  assert.match(secondFix.reason, /fix-pr pass limit reached/);
+});
+
 test("review HUMAN_DECISION dispatches self-approval when enabled", () => {
   for (const verdict of ["SHIP", "MINOR_ISSUES", "NEEDS_REWORK"]) {
     const decision = decideHandoff({
