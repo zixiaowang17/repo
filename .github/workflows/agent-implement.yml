@@ -226,6 +226,7 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
           github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
@@ -255,6 +256,16 @@ jobs:
           target_number: ${{ env.ISSUE_NUMBER }}
           target_url: ${{ github.server_url }}/${{ github.repository }}/issues/${{ env.ISSUE_NUMBER }}
           workflow: agent-implement.yml
+
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
 
       - name: Verify changes
         if: always()
@@ -294,7 +305,7 @@ jobs:
             ${{ steps.response.outputs.commit_message || format('feat: agent-{0} #{1} ({2})', env.IMPLEMENTATION_ROUTE, env.ISSUE_NUMBER, steps.provider.outputs.provider) }}
           GIT_BOT_EMAIL: ${{ vars.AGENT_COMMITTER_EMAIL || '' }}
           GIT_BOT_NAME: ${{ vars.AGENT_COMMITTER_NAME || '' }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           SET_UPSTREAM: "true"
         run: node .agent/dist/cli/commit.js
 
@@ -304,7 +315,7 @@ jobs:
         env:
           BASE_BRANCH: ${{ env.BASE_BRANCH }}
           BRANCH: ${{ env.BRANCH }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
           PR_BODY: ${{ steps.response.outputs.pr_body }}
           PR_TITLE: ${{ steps.response.outputs.pr_title }}
@@ -317,7 +328,7 @@ jobs:
         continue-on-error: true
         env:
           AGENT_STATUS_LABEL_ENABLED: ${{ vars.AGENT_STATUS_LABEL_ENABLED || '' }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           TARGET_KIND: pull_request
           TARGET_NUMBER: ${{ steps.pr.outputs.pr_number }}
@@ -329,7 +340,7 @@ jobs:
           APPROVAL_COMMENT_URL: ${{ inputs.approval_comment_url }}
           BRANCH: ${{ env.BRANCH }}
           COMMENT_TARGET: issue
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
           RESPONSE_FILE: ${{ steps.agent.outputs.response_file }}
@@ -347,7 +358,7 @@ jobs:
       - name: Orchestrate automation handoff
         if: >-
           always() &&
-          steps.auth.outputs.token &&
+          steps.post_auth.outputs.token &&
           steps.progress_status.outputs.cancelled != 'true' &&
           inputs.orchestration_enabled == 'true'
         env:
@@ -355,7 +366,7 @@ jobs:
           AUTOMATION_MAX_ROUNDS: ${{ inputs.automation_max_rounds }}
           AUTOMATION_MODE: ${{ inputs.automation_mode }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           NEXT_TARGET_NUMBER: ${{ steps.pr.outputs.pr_number }}
           ORCHESTRATION_ENABLED: ${{ inputs.orchestration_enabled }}

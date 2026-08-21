@@ -93,6 +93,7 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
           github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}

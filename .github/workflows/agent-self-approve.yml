@@ -133,6 +133,7 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
           github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
@@ -169,6 +170,16 @@ jobs:
           SELF_APPROVE_SOURCE_CONCLUSION: ${{ inputs.source_conclusion }}
           SELF_APPROVE_SOURCE_RECOMMENDED_NEXT_STEP: ${{ inputs.source_recommended_next_step }}
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       - name: Resolve self-approval result
         id: result
         if: >-
@@ -178,7 +189,7 @@ jobs:
           AGENT_ALLOW_SELF_APPROVE: ${{ vars.AGENT_ALLOW_SELF_APPROVE || 'false' }}
           AGENT_ALLOW_SELF_MERGE: ${{ vars.AGENT_ALLOW_SELF_MERGE || 'false' }}
           EXPECTED_HEAD_SHA: ${{ steps.prepare.outputs.head_sha }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
@@ -196,7 +207,7 @@ jobs:
         env:
           BODY_FILE: ${{ steps.result.outputs.body_file }}
           MODEL_DISPLAY: ${{ steps.agent.outputs.model_display }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RESPONSE_KIND: pr_comment
           TARGET_NUMBER: ${{ inputs.pr_number }}
@@ -228,7 +239,7 @@ jobs:
           AUTOMATION_MAX_ROUNDS: ${{ inputs.automation_max_rounds }}
           AUTOMATION_MODE: ${{ inputs.automation_mode }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           ORCHESTRATION_ENABLED: ${{ inputs.orchestration_enabled }}
           REQUESTED_BY: ${{ inputs.requested_by || github.actor }}

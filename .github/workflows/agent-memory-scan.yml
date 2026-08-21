@@ -103,8 +103,9 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
-          github_token: ${{ steps.auth.outputs.token }}
+          github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -129,11 +130,21 @@ jobs:
           reasoning_effort: ${{ steps.provider.outputs.reasoning_effort || 'medium' }}
           workflow: agent-memory-scan.yml
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       - name: Write memory scan state
         if: steps.scan.outcome == 'success'
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-          INPUT_GITHUB_TOKEN: ${{ steps.auth.outputs.token }}
+          INPUT_GITHUB_TOKEN: ${{ steps.post_auth.outputs.token }}
           REPO_SLUG: ${{ github.repository }}
           SCHEDULE_LAST_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SCHEDULE_STATE_FIELD: last_scan_at

@@ -60,6 +60,7 @@ import {
 } from "./session-bundle.js";
 import { buildSharedEnv } from "./runtime-env.js";
 import { buildAnswerReviewContext } from "./answer-review-context.js";
+import { resolveAgentTimeoutSeconds } from "./task-deadline.js";
 
 // --- Logging ---
 
@@ -465,6 +466,14 @@ function main(): void {
   const fileId = randomBytes(8).toString("hex");
   const sharedEnv = buildSharedEnv();
   const permissionMode = parsePermissionModeOrSetDefault(process.env.ACPX_PERMISSION_MODE);
+  let timeoutSeconds: number;
+  try {
+    timeoutSeconds = resolveAgentTimeoutSeconds();
+  } catch (err) {
+    log("error", err instanceof Error ? err.message : String(err));
+    process.exitCode = 2;
+    return;
+  }
   runDirectPath({
     agent,
     repoRoot,
@@ -476,6 +485,7 @@ function main(): void {
     sharedEnv,
     runnerTemp,
     fileId,
+    timeoutSeconds,
   });
 }
 
@@ -492,6 +502,7 @@ function runDirectPath(opts: {
   sharedEnv: Record<string, string>;
   runnerTemp: string;
   fileId: string;
+  timeoutSeconds: number;
 }): void {
   const {
     agent,
@@ -504,6 +515,7 @@ function runDirectPath(opts: {
     sharedEnv,
     runnerTemp,
     fileId,
+    timeoutSeconds,
   } = opts;
   let sessionPolicy: SessionPolicy;
   try {
@@ -611,7 +623,12 @@ function runDirectPath(opts: {
     }
   }
 
-  log("info", "Running acpx", { agent, route: envelope.route, permission_mode: permissionMode });
+  log("info", "Running acpx", {
+    agent,
+    route: envelope.route,
+    permission_mode: permissionMode,
+    timeout_seconds: timeoutSeconds,
+  });
   const sessionBundleMode = parseSessionBundleMode(process.env.SESSION_BUNDLE_MODE);
   const requestedModel = process.env.MODEL_ID?.trim() || "";
 
@@ -628,6 +645,7 @@ function runDirectPath(opts: {
       sessionPolicy === "track-only" && shouldBackupSessionBundles(sessionBundleMode, sessionPolicy),
     resumeSessionId,
     continuationPrompt: continuationPromptAllowed ? continuationPrompt : undefined,
+    timeout: timeoutSeconds,
     env: sharedEnv,
   });
 
@@ -637,6 +655,7 @@ function runDirectPath(opts: {
 
   log("info", "acpx completed", {
     exit_code: result.exitCode,
+    timed_out: result.timedOut,
     session_name: result.sessionName,
     stdout_length: result.stdout.length,
     raw_stdout_length: result.rawStdout.length,
@@ -669,8 +688,12 @@ function runDirectPath(opts: {
 
   // Save response
   const responseFile = join(runnerTemp, `acpx-response-${fileId}.md`);
-  writeFileSync(responseFile, result.stdout, "utf8");
+  const response = result.timedOut && result.stdout.trim()
+    ? `> The agent reached its task deadline. This captured response may be incomplete.\n\n${result.stdout}`
+    : result.stdout;
+  writeFileSync(responseFile, response, "utf8");
   setOutput("response_file", responseFile);
+  setOutput("timed_out", result.timedOut ? "true" : "false");
 
   let identity: { acpxRecordId: string; acpxSessionId: string } | null = null;
   if (result.sessionName) {

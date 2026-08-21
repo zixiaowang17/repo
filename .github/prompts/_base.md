@@ -33,6 +33,9 @@ fetches, or generic web fetches for private GitHub attachment URLs.
   - Use the local checkout and repository files as the primary source of truth for the current code state
   - Avoid broad searches through generated/vendor directories like `.git/`, `node_modules/`, `.agent/node_modules/`, `dist/`, and `.agent/dist/` unless the task is specifically about them
 - If a `gh`, `git`, `curl`, or other network-backed command fails with a likely transient server, rate-limit, timeout, or connection error, you may wait and retry for a bounded period of up to a few minutes. Do not repeatedly retry deterministic failures such as auth denial, missing permissions, invalid refs, validation errors, or non-fast-forward/lease conflicts.
+- Track each background command by its returned task identifier or exact process identifier (PID).
+- Do not use `pgrep -f` to wait for a command. The search can match its own polling shell.
+- Before your final response, stop or await each background command that you started.
 - Since you are running inside a github action, there are a few other differences compared to directly interacting with users:
   - You have full permission to run commands given it's a sandbox environment.
   - When you draft a message and when you want to refer to files, please use links for github files rather than local file references.

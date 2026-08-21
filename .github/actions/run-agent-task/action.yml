@@ -40,6 +40,9 @@ inputs:
   route:
     description: "Envelope route (implement, review, fix-pr, answer, create-action, add-rubrics, dispatch, agent-self-approve, agent-self-merge, skill, install, update-agent, rubrics-review, rubrics-initialization, rubrics-update)"
     required: true
+  timeout_minutes:
+    description: "Resolved outer task timeout in minutes"
+    required: true
   agent_cwd:
     description: "Optional worktree where the agent process should run"
     required: false
@@ -265,6 +268,9 @@ outputs:
   progress_comment_id:
     description: "Issue comment id used by the live progress reporter, when one was created"
     value: ${{ steps.stop_progress_reporter.outputs.progress_comment_id }}
+  timed_out:
+    description: "Whether acpx reached the internal task deadline"
+    value: ${{ steps.run.outputs.timed_out }}
 
 runs:
   using: composite
@@ -277,6 +283,13 @@ runs:
           echo "Run the setup-agent-runtime action before run-agent-task." >&2
           exit 1
         fi
+
+    - name: Set task deadline
+      id: task_deadline
+      shell: bash
+      env:
+        TASK_TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+      run: node .agent/dist/cli/resolve-task-deadline.js
 
     - name: Restore session bundle
       id: restore
@@ -489,6 +502,8 @@ runs:
         TARGET_KIND: ${{ inputs.target_kind }}
         TARGET_NUMBER: ${{ inputs.target_number }}
         TARGET_URL: ${{ inputs.target_url }}
+        AGENT_TASK_DEADLINE_EPOCH_SECONDS: ${{ steps.task_deadline.outputs.epoch_seconds }}
+        AGENT_TASK_TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         WORKFLOW: ${{ inputs.workflow }}
       run: |
         # Keep the composite action alive long enough to run best-effort

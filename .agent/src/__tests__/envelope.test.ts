@@ -583,6 +583,12 @@ test("run-agent-task workflow steps are guarded by resolved task timeouts", () =
             "${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}",
             `${workflowPath} job ${jobId} should coerce resolved timeout minutes`,
           );
+          assert.ok(isRecord(step.with), `${workflowPath} job ${jobId} run-agent-task needs inputs`);
+          assert.equal(
+            step.with.timeout_minutes,
+            `\${{ steps.${match[1]!}.outputs.minutes }}`,
+            `${workflowPath} job ${jobId} must pass the resolved timeout into the runtime`,
+          );
           guardedSteps += 1;
         }
       }
@@ -1584,6 +1590,8 @@ test("shared run-agent-task action exists and requires explicit prompt/skill/lan
   assert.match(action, /anthropic_api_key:/);
   assert.match(action, /lane:/);
   assert.match(action, /session_policy:/);
+  const timeoutMinutesBlock = action.match(/timeout_minutes:[\s\S]*?(?=^  [a-z_]+:|^outputs:)/m)?.[0] || "";
+  assert.match(timeoutMinutesBlock, /required:\s*true/);
   const sessionPolicyBlock = action.match(/session_policy:[\s\S]*?(?=^  [a-z_]+:|^outputs:)/m)?.[0] || "";
   assert.match(sessionPolicyBlock, /required:\s*true/);
   assert.doesNotMatch(sessionPolicyBlock, /default:/);
@@ -1595,6 +1603,9 @@ test("shared run-agent-task action exists and requires explicit prompt/skill/lan
   assert.match(action, /ANTHROPIC_API_KEY/);
   assert.match(action, /LANE/);
   assert.match(action, /SESSION_POLICY/);
+  assert.match(action, /AGENT_TASK_DEADLINE_EPOCH_SECONDS/);
+  assert.match(action, /AGENT_TASK_TIMEOUT_MINUTES/);
+  assert.match(action, /resolve-task-deadline\.js/);
   assert.match(action, /\.agent\/dist\/run\.js/);
 });
 
@@ -1670,7 +1681,14 @@ test("progress lifecycle uses the non-recursive workflow token", () => {
     assert.ok(step, `${finalizer.path} should define ${finalizer.stepName}`);
     assert.ok(isRecord(step.env), `${finalizer.stepName} should define env`);
     assert.equal(step.env.AGENT_PROGRESS_GITHUB_TOKEN, "${{ github.token }}");
-    assert.equal(step.env.GH_TOKEN, "${{ steps.auth.outputs.token }}");
+    assert.equal(step.env.GH_TOKEN, "${{ steps.post_auth.outputs.token }}");
+    const runIndex = job.steps.indexOf(runStep);
+    const refreshIndex = job.steps.findIndex(
+      (candidate) => isRecord(candidate) && candidate.name === "Refresh GitHub auth",
+    );
+    const finalizerIndex = job.steps.indexOf(step);
+    assert.ok(refreshIndex > runIndex, `${finalizer.path} should refresh auth after the agent run`);
+    assert.ok(refreshIndex < finalizerIndex, `${finalizer.path} should refresh auth before finalization`);
   }
 
   const lifecycleDocs = readRepoFile(".agent/docs/architecture/request-lifecycle.md");
@@ -1765,10 +1783,10 @@ test("run-agent-task callers pass secondary token without replacing primary auth
           );
           continue;
         }
-        assert.notEqual(
+        assert.equal(
           step.with.github_token,
-          "${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}",
-          `${workflowPath} job ${jobId} must not replace primary auth with secondary token`,
+          "${{ github.token }}",
+          `${workflowPath} job ${jobId} must use the job-lifetime token during model execution`,
         );
         assert.equal(
           step.with.secondary_github_token,
@@ -1780,6 +1798,53 @@ test("run-agent-task callers pass secondary token without replacing primary auth
   }
 
   assert.ok(runTaskCount > 0);
+});
+
+test("agent jobs do not reuse pre-run app tokens after model execution", () => {
+  const workflowPaths = readdirSync(path.join(repoRoot, ".github/workflows"))
+    .filter((file) => file.endsWith(".yml"))
+    .map((file) => `.github/workflows/${file}`)
+    .concat(".agent/action-templates/agent-action-template.yml");
+
+  for (const workflowPath of workflowPaths) {
+    const workflow = parseYaml(readRepoFile(workflowPath)) as unknown;
+    assert.ok(isRecord(workflow), `${workflowPath} should parse as a YAML object`);
+    if (!isRecord(workflow.jobs)) continue;
+
+    for (const [jobId, job] of Object.entries(workflow.jobs)) {
+      if (!isRecord(job) || !Array.isArray(job.steps)) continue;
+      const lastRunIndex = job.steps.reduce(
+        (last, step, index) =>
+          isRecord(step) && step.uses === "./.github/actions/run-agent-task" ? index : last,
+        -1,
+      );
+      if (lastRunIndex < 0) continue;
+
+      const laterSteps = job.steps.slice(lastRunIndex + 1);
+      for (const step of laterSteps) {
+        assert.doesNotMatch(
+          JSON.stringify(step),
+          /steps\.auth\.outputs\.token/,
+          `${workflowPath} job ${jobId} must not reuse auth resolved before the agent run`,
+        );
+      }
+
+      const firstPostAuthUse = laterSteps.findIndex((step) =>
+        JSON.stringify(step).includes("steps.post_auth.outputs.token"),
+      );
+      if (firstPostAuthUse < 0) continue;
+      const refreshIndex = laterSteps.findIndex(
+        (step) =>
+          isRecord(step) &&
+          step.name === "Refresh GitHub auth" &&
+          step.uses === "./.github/actions/resolve-github-auth",
+      );
+      assert.ok(
+        refreshIndex >= 0 && refreshIndex < firstPostAuthUse,
+        `${workflowPath} job ${jobId} must refresh auth before its first post-run write`,
+      );
+    }
+  }
 });
 
 test("shared setup-agent-runtime action exists and is referenced by reusable workflows", () => {
@@ -1824,7 +1889,7 @@ test("skill route uses the composite setup action for path and setup checks", ()
   assert.match(skillWorkflow, /trusted_ref:\s*\$\{\{ !startsWith\(github\.ref, 'refs\/pull\/'\) \}\}/);
   assert.match(skillWorkflow, /skill_root:\s*\$\{\{ inputs\.skill_root \}\}/);
   assert.doesNotMatch(skillWorkflow, /install_target_repo:/);
-  assert.match(skillWorkflow, /github_token:\s*\$\{\{\s*steps\.auth\.outputs\.token\s*\}\}/);
+  assert.match(skillWorkflow, /github_token:\s*\$\{\{\s*github\.token\s*\}\}/);
   assert.match(installWorkflow, /needs\.portal\.outputs\.route == 'install'/);
   assert.match(installWorkflow, /persist-credentials:\s*false/);
   assert.match(installWorkflow, /AGENT_INSTALL_PAT_CONFIGURED:\s*\$\{\{\s*secrets\.AGENT_INSTALL_PAT != '' && 'true' \|\| 'false'\s*\}\}/);

@@ -324,8 +324,9 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.dispatch_provider.outputs.provider }}
-          github_token: ${{ steps.auth.outputs.token }}
+          github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -358,8 +359,9 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.followup_provider.outputs.provider }}
-          github_token: ${{ steps.auth.outputs.token }}
+          github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -399,8 +401,9 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
-          github_token: ${{ steps.auth.outputs.token }}
+          github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -424,6 +427,16 @@ jobs:
           reasoning_effort: ${{ steps.provider.outputs.reasoning_effort || 'medium' }}
           workflow: agent-router.yml
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       - name: Resolve route
         if: >-
           steps.context.outputs.should_respond == 'true' &&
@@ -443,7 +456,7 @@ jobs:
           AUTHOR_ASSOCIATION: ${{ steps.context.outputs.association }}
           ACCESS_POLICY: ${{ inputs.access_policy }}
           REPOSITORY_PRIVATE: ${{ github.event.repository.private && 'true' || 'false' }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: node .agent/dist/cli/resolve-dispatch.js
 
@@ -453,7 +466,7 @@ jobs:
           steps.context.outputs.implicit_followup == 'true' &&
           steps.dispatch.outputs.route == 'answer'
         env:
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           REACTION_SUBJECT_ID: ${{ steps.context.outputs.reaction_subject_id }}
           REACTION_CONTENT: EYES
         run: node .agent/dist/cli/add-reaction.js
@@ -468,7 +481,7 @@ jobs:
         continue-on-error: true
         env:
           AGENT_STATUS_LABEL_ENABLED: ${{ vars.AGENT_STATUS_LABEL_ENABLED || '' }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           TARGET_KIND: ${{ steps.context.outputs.target_kind }}
           TARGET_NUMBER: ${{ steps.context.outputs.target_number }}
@@ -480,7 +493,7 @@ jobs:
           (steps.dispatch.outputs.route == 'review' || steps.dispatch.outputs.route == 'fix-pr' || steps.dispatch.outputs.route == 'orchestrate') &&
           github.event.action != 'edited'
         env:
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           REACTION_SUBJECT_ID: ${{ steps.context.outputs.reaction_subject_id }}
           REACTION_CONTENT: THUMBS_UP
         run: node .agent/dist/cli/add-reaction.js
@@ -544,6 +557,7 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
           github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
@@ -576,6 +590,16 @@ jobs:
           reasoning_effort: ${{ steps.provider.outputs.reasoning_effort || 'high' }}
           workflow: agent-router.yml
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       - name: Prepare unsupported response
         if: needs.portal.outputs.route == 'unsupported'
         env:
@@ -595,7 +619,7 @@ jobs:
           AGENT_PROGRESS_GITHUB_TOKEN: ${{ github.token }}
           MODEL_DISPLAY: ${{ steps.answer.outputs.model_display }}
           DISCUSSION_ID: ${{ needs.portal.outputs.discussion_node_id }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPLY_TO_ID: ${{ needs.portal.outputs.reply_to_id }}
           RESPONSE_KIND: ${{ needs.portal.outputs.response_kind }}
@@ -610,7 +634,7 @@ jobs:
         env:
           BODY_FILE: ${{ runner.temp }}/unsupported.md
           DISCUSSION_ID: ${{ needs.portal.outputs.discussion_node_id }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPLY_TO_ID: ${{ needs.portal.outputs.reply_to_id }}
           RESPONSE_KIND: ${{ needs.portal.outputs.response_kind }}
@@ -750,8 +774,9 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.skill_provider.outputs.provider }}
-          github_token: ${{ steps.auth.outputs.token }}
+          github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -776,13 +801,23 @@ jobs:
           reasoning_effort: ${{ steps.skill_provider.outputs.reasoning_effort || 'high' }}
           workflow: agent-router.yml
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       - name: Post skill response
         if: steps.skill_check.outputs.exists == 'true' && steps.skill_setup.outcome == 'success' && steps.skill.outcome == 'success'
         env:
           BODY_FILE: ${{ steps.skill.outputs.response_file }}
           MODEL_DISPLAY: ${{ steps.skill.outputs.model_display }}
           DISCUSSION_ID: ${{ needs.portal.outputs.discussion_node_id }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPLY_TO_ID: ${{ needs.portal.outputs.reply_to_id }}
           RESPONSE_KIND: ${{ needs.portal.outputs.response_kind }}
@@ -869,6 +904,7 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
           github_token: ${{ secrets.AGENT_INSTALL_PAT }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
@@ -894,6 +930,16 @@ jobs:
           reasoning_effort: ${{ steps.provider.outputs.reasoning_effort || 'high' }}
           workflow: agent-router.yml
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       - name: Post install response
         id: post_install_response
         if: env.AGENT_INSTALL_PAT_CONFIGURED == 'true' && steps.install.outcome == 'success'
@@ -901,7 +947,7 @@ jobs:
           BODY_FILE: ${{ steps.install.outputs.response_file }}
           MODEL_DISPLAY: ${{ steps.install.outputs.model_display }}
           DISCUSSION_ID: ${{ needs.portal.outputs.discussion_node_id }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPLY_TO_ID: ${{ needs.portal.outputs.reply_to_id }}
           RESPONSE_KIND: ${{ needs.portal.outputs.response_kind }}
@@ -919,7 +965,7 @@ jobs:
           steps.install.outputs.install_pr_url != ''
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           INSTALL_PR_URL: ${{ steps.install.outputs.install_pr_url }}
           INSTALL_STATUS: ${{ steps.install.outputs.install_status }}

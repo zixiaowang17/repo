@@ -58,6 +58,8 @@ export type SessionEnsureOutcome =
 
 export interface AcpxRunResult {
   exitCode: number;
+  /** Whether acpx reached its soft deadline or required a hard process timeout. */
+  timedOut: boolean;
   /** Final assistant message extracted from the session */
   stdout: string;
   /** Raw acpx stdout (typically NDJSON) */
@@ -112,6 +114,7 @@ export interface FileCaptureRunOptions {
 
 export interface FileCaptureRunResult {
   exitCode: number;
+  timedOut: boolean;
   stdout: string;
   stderr: string;
 }
@@ -153,6 +156,7 @@ export function runCommandWithFileCapture(options: FileCaptureRunOptions): FileC
       env,
       stdio: ["ignore", stdoutFd, stderrFd],
       timeout: options.timeout ? options.timeout * 1000 : undefined,
+      killSignal: "SIGKILL",
     });
 
     closeSync(stdoutFd);
@@ -175,6 +179,7 @@ export function runCommandWithFileCapture(options: FileCaptureRunOptions): FileC
           : result.error || result.signal
             ? 1
             : 0,
+      timedOut: (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT",
       stdout,
       stderr,
     };
@@ -812,6 +817,7 @@ export function runAcpx(options: AcpxRunOptions): AcpxRunResult {
     if (sessionEnsureOutcome.kind === "failed") {
       return {
         exitCode: 1,
+        timedOut: false,
         stdout: "",
         rawStdout: "",
         stderr: `session setup failed: ${sessionEnsureOutcome.error}`,
@@ -832,6 +838,7 @@ export function runAcpx(options: AcpxRunOptions): AcpxRunResult {
     if (!setupResult.ok) {
       return {
         exitCode: setupResult.status ?? 1,
+        timedOut: false,
         stdout: "",
         rawStdout: "",
         stderr: `session setup failed: ${setupResult.stderr}`,
@@ -849,6 +856,7 @@ export function runAcpx(options: AcpxRunOptions): AcpxRunResult {
     if (sessionEnsureOutcome.kind === "failed") {
       return {
         exitCode: 1,
+        timedOut: false,
         stdout: "",
         rawStdout: "",
         stderr: `session setup failed: ${sessionEnsureOutcome.error}`,
@@ -869,6 +877,7 @@ export function runAcpx(options: AcpxRunOptions): AcpxRunResult {
     if (!setupResult.ok) {
       return {
         exitCode: setupResult.status ?? 1,
+        timedOut: false,
         stdout: "",
         rawStdout: "",
         stderr: `session setup failed: ${setupResult.stderr}`,
@@ -897,13 +906,14 @@ export function runAcpx(options: AcpxRunOptions): AcpxRunResult {
     args,
     cwd,
     env,
-    timeout,
+    timeout: timeout ? timeout + 15 : undefined,
   });
 
   const sessionLog = compactSessionLog(result.stdout);
   const stdout = extractAssistantText(sessionLog);
   return {
     exitCode: result.exitCode,
+    timedOut: result.timedOut || result.exitCode === 3,
     stdout,
     rawStdout: result.stdout,
     stderr: result.stderr,

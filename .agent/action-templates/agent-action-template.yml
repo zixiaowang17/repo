@@ -83,8 +83,9 @@ jobs:
         timeout-minutes: ${{ fromJson(steps.task_timeout.outputs.minutes || '30') }}
         uses: ./.github/actions/run-agent-task
         with:
+          timeout_minutes: ${{ steps.task_timeout.outputs.minutes }}
           agent: ${{ steps.provider.outputs.provider }}
-          github_token: ${{ steps.auth.outputs.token }}
+          github_token: ${{ github.token }}
           secondary_github_token: ${{ secrets.AGENT_SECONDARY_GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -108,6 +109,16 @@ jobs:
           target_url: ${{ github.server_url }}/${{ github.repository }}
           workflow: agent-action-example.yml
 
+      - name: Refresh GitHub auth
+        id: post_auth
+        if: always()
+        uses: ./.github/actions/resolve-github-auth
+        with:
+          app_id: ${{ secrets.AGENT_APP_ID }}
+          app_private_key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          pat: ${{ secrets.AGENT_PAT }}
+          fallback_token: ${{ github.token }}
+
       # Optional: set REPORT_ISSUE_NUMBER and add issue write permission only when the workflow should report to an issue.
       - name: Post report to issue
         if: >-
@@ -117,7 +128,7 @@ jobs:
         env:
           BODY_FILE: ${{ steps.agent.outputs.response_file }}
           MODEL_DISPLAY: ${{ steps.agent.outputs.model_display }}
-          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ steps.post_auth.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RESPONSE_KIND: issue_comment
           TARGET_NUMBER: ${{ env.REPORT_ISSUE_NUMBER }}

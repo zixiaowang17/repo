@@ -759,6 +759,20 @@ test("runCommandWithFileCapture treats signal-terminated processes as failures",
   assert.equal(result.exitCode, 1);
 });
 
+test("runCommandWithFileCapture preserves partial stdout after a timeout", () => {
+  const result = runCommandWithFileCapture({
+    command: process.execPath,
+    args: ["-e", "process.stdout.write('captured\\n'); setInterval(() => {}, 1000)"],
+    cwd: process.cwd(),
+    timeout: 1,
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.timedOut, true);
+  assert.equal(result.stdout, "captured\n");
+  assert.match(result.stderr, /timed out|ETIMEDOUT/i);
+});
+
 test("runCommandWithFileCapture removes the ephemeral capture directory when progress stream is unset", () => {
   const dir = mkdtempSync(join(tmpdir(), "acpx-capture-root-test-"));
   const oldTmpdir = process.env.TMPDIR;
